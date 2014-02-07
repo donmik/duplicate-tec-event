@@ -122,6 +122,39 @@ function dte_duplicate_tribe_event() {
     
     $new_event_id = TribeEventsAPI::createEvent( $event );
     
+    if (class_exists('TribeWooTickets')) {
+        $wootickets = TribeWooTickets::get_instance();
+        $tickets = $wootickets->get_event_tickets($event_id);
+        if (count($tickets) > 0) {
+            foreach ($tickets as $t) {
+                $new_ticket = new TribeEventsTicketObject();
+                $new_ticket->ID = null;
+                $new_ticket->name = isset( $t->name ) ? esc_html( $t->name ) : null;
+                $new_ticket->description = isset( $t->description ) ? esc_html( $t->description ) : null;
+                $new_ticket->price       = !empty( $t->price ) ? trim( $t->price ) : 0;
+                if ( !empty( $new_ticket->price ) ) {
+                    //remove non-money characters
+                    $new_ticket->price = preg_replace( '/[^0-9\.]/Uis', '', $new_ticket->price );
+                }
+                $new_ticket->start_date = !empty($t->start_date)?$t->start_date:null;
+                $new_ticket->end_date = !empty($t->end_date)?$t->end_date:null;
+                $new_ticket->provider_class = $t->className;
+                $stock = (int)$t->stock;
+                /** If there is stock **/
+                if ($stock > 0) {
+                    $qty = get_post_meta( $t->ID, 'total_sales', true );
+                    $raw_data = array('ticket_woo_stock' => ($stock + $qty));
+                }
+                $wootickets->save_ticket($new_event_id, $new_ticket, $raw_data);
+            }
+            /** Copy Header image too **/
+            $ticket_image = TribeEventsTicketsPro::instance()->get_header_image_id($event_id);
+            if ($ticket_image != '') {
+                update_post_meta( $new_event_id, '_tribe_ticket_header', $ticket_image);
+            }
+        }
+    }
+    
     // Merge in any additional meta that may have been missed by createEvent
     foreach( $fmeta AS $k => $v ) {
         update_post_meta( $new_event_id, $k, $v );
